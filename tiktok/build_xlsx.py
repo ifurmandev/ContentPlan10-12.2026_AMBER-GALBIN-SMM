@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Збирає TikTok-план на жовтень 2026 у .xlsx для імпорту в Google Таблиці.
 
-Календар і заміри тягнуть дані зі «Сценаріїв» і «Свят» формулами,
-тож змінюєте дату чи назву відео в одному місці — оновлюється всюди.
+Кожне відео в календарі — посилання на свій рядок у «Сценаріях»,
+№ сценарію — посилання назад у календар. Заміри тягнуть дані формулами.
+Шрифти лише з кирилицею: Lexend її не має, і Google розтягує літери.
 """
 import datetime as dt
 import sys
@@ -13,10 +14,12 @@ from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.worksheet.hyperlink import Hyperlink
 
 import content_october as C
 
-FONT = "Lexend"
+FONT = "Roboto"
+DISPLAY = "Montserrat"
 GRID = "D9D9D9"
 INK = "4A4A4A"
 MUTED = "8C8C8C"
@@ -78,7 +81,7 @@ def title(ws, text, sub=None, span="A1:H1"):
     ws.merge_cells(span)
     c = ws[span.split(":")[0]]
     c.value = text
-    c.font = Font(name=FONT, size=22, bold=True, color="555555")
+    c.font = Font(name=DISPLAY, size=22, bold=True, color="555555")
     c.alignment = Alignment(vertical="center")
     ws.row_dimensions[1].height = 40
     if sub:
@@ -92,6 +95,16 @@ def title(ws, text, sub=None, span="A1:H1"):
 
 
 FIRST = 5  # перший рядок даних у «Сценаріях»
+BY_DATE = {v["date"]: (i + 1, v) for i, v in enumerate(C.S)}
+CAL_CELL = {}  # дата → клітинка з датою в календарі (заповнює build_calendar)
+SHORT_HOLIDAYS = {
+    dt.date(2026, 10, 1): "🇺🇦 День захисників · Покрова",
+    dt.date(2026, 10, 4): "📚 День працівників освіти",
+    dt.date(2026, 10, 11): "🎨 День художника",
+    dt.date(2026, 10, 25): "🚗 День автомобіліста",
+    dt.date(2026, 10, 28): "🕯 Пам’ятний день",
+    dt.date(2026, 10, 31): "🎃 Хелловін",
+}
 LAST = FIRST + len(C.S) - 1
 SC = "'Сценарії'"
 
@@ -100,7 +113,7 @@ def build_scenarios(wb):
     ws = wb.create_sheet("Сценарії")
     ws.sheet_view.showGridLines = False
     title(ws, "Сценарії TikTok · жовтень 2026",
-          "Тут живе весь контент. Змініть дату, час або назву — календар оновиться сам. "
+          "Натисніть «№ ↑», щоб повернутися в календар. "
           "Поля [__] заповнює клієнт. Статус обирайте зі списку.", span="A1:T1")
     headers = ["№", "Дата", "День", "Час", "Рубрика", "Назва відео", "Свято / привід",
                "Суть відео", "Хук: перші 1–2 с і текст на екрані", "Розкадровка",
@@ -120,6 +133,11 @@ def build_scenarios(wb):
             c.font = font(9)
             c.alignment = WRAP_TOP
             c.border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        back = ws.cell(row=r, column=1)
+        back.value = f"{i + 1} ↑"
+        back.hyperlink = Hyperlink(ref=back.coordinate, location=f"'Календар'!{CAL_CELL[s['date']]}",
+                                   display=back.value, tooltip="Назад у календар")
+        back.font = font(9, "1F4E79", bold=True)
         ws.cell(row=r, column=2).number_format = "dd.mm"
         ws.cell(row=r, column=6).font = font(9, bold=True)
         ws.cell(row=r, column=7).font = font(8, HOLIDAY, bold=True)
@@ -152,11 +170,11 @@ def build_calendar(wb):
     ws.row_dimensions[1].height = 10
     ws.merge_cells("B2:E2")
     ws["B2"] = "Жовтень"
-    ws["B2"].font = Font(name=FONT, size=54, bold=True, color="555555")
+    ws["B2"].font = Font(name=DISPLAY, size=54, bold=True, color="555555")
     ws["B2"].alignment = Alignment(vertical="bottom")
     ws.merge_cells("F2:H2")
     ws["F2"] = "2026"
-    ws["F2"].font = Font(name=FONT, size=44, bold=True, color="BDBDBD")
+    ws["F2"].font = Font(name=DISPLAY, size=44, bold=True, color="BDBDBD")
     ws["F2"].alignment = Alignment(horizontal="right", vertical="bottom")
     ws.row_dimensions[2].height = 78
     ws.merge_cells("B3:H3")
@@ -168,7 +186,7 @@ def build_calendar(wb):
     days = ["ПОНЕДІЛОК", "ВІВТОРОК", "СЕРЕДА", "ЧЕТВЕР", "П’ЯТНИЦЯ", "СУБОТА", "НЕДІЛЯ"]
     for i, d in enumerate(days):
         c = ws.cell(row=5, column=2 + i, value=d)
-        c.font = font(9, "6B6B6B")
+        c.font = Font(name=DISPLAY, size=8, color="6B6B6B")
         c.alignment = Alignment(horizontal="center", vertical="center")
         c.border = Border(left=thin, right=thin, top=thin, bottom=thin)
     ws.row_dimensions[5].height = 28
@@ -178,7 +196,7 @@ def build_calendar(wb):
     for week in range(5):
         dr, hr, cr = row, row + 1, row + 2
         ws.row_dimensions[dr].height = 34
-        ws.row_dimensions[hr].height = 26
+        ws.row_dimensions[hr].height = 22
         ws.row_dimensions[cr].height = 72
         for i in range(7):
             col = 2 + i
@@ -187,27 +205,31 @@ def build_calendar(wb):
             in_month = day.month == 10
             dc = ws.cell(row=dr, column=col, value=day if in_month else None)
             dc.number_format = "d"
-            dc.font = Font(name=FONT, size=20, color="5A5A5A")
+            dc.font = Font(name=DISPLAY, size=20, color="5A5A5A")
             dc.alignment = Alignment(horizontal="left", vertical="top", indent=0)
             dc.border = Border(left=thin, right=thin, top=thin)
 
-            hc = ws.cell(row=hr, column=col,
-                         value=f"=IFERROR(VLOOKUP({L}{dr},'Свята'!$A$5:$B$30,2,FALSE),\"\")")
+            hc = ws.cell(row=hr, column=col, value=SHORT_HOLIDAYS.get(day) if in_month else None)
             hc.font = font(8, HOLIDAY, bold=True)
             hc.alignment = WRAP_TOP
             hc.border = Border(left=thin, right=thin)
 
-            m = f"MATCH({L}{dr},{SC}!$B${FIRST}:$B${LAST + 20},0)"
-            cc = ws.cell(row=cr, column=col, value=(
-                f"=IFERROR(INDEX({SC}!$E${FIRST}:$E${LAST + 20},{m})&\"  ·  \"&"
-                f"INDEX({SC}!$D${FIRST}:$D${LAST + 20},{m})&CHAR(10)&"
-                f"INDEX({SC}!$F${FIRST}:$F${LAST + 20},{m}),\"\")"))
+            cc = ws.cell(row=cr, column=col)
             cc.font = font(8, INK, bold=True)
+            if in_month and day in BY_DATE:
+                n, v = BY_DATE[day]
+                bg, fg = C.RUBRIC_COLORS[v["rubric"]]
+                cc.value = f'{v["rubric"]}  ·  {v["time"]}\n{v["title"]}  →'
+                # display обов'язковий: без нього Google показує в клітинці адресу посилання замість тексту
+                cc.hyperlink = Hyperlink(ref=cc.coordinate, location=f"{SC}!A{FIRST + n - 1}",
+                                         display=cc.value, tooltip="Відкрити сценарій")
+                cc.fill = fill(bg)
+                cc.font = font(8, fg, bold=True)
+                CAL_CELL[day] = f"{L}{dr}"
             cc.alignment = WRAP_TOP
             cc.border = Border(left=thin, right=thin, bottom=thin)
         row += 3
     last_grid = row - 1
-    rubric_rules(ws, f"B6:H{last_grid}", "B6")
 
     row += 1
     ws.cell(row=row, column=2, value="РУБРИКИ").font = font(8, MUTED, bold=True)
@@ -224,8 +246,8 @@ def build_calendar(wb):
     row += 2
     ws.merge_cells(f"B{row}:H{row}")
     n = ws.cell(row=row, column=2, value=(
-        "Календар заповнюється автоматично з вкладки «Сценарії» (рубрика, час, назва) і «Свята». "
-        "Щоб перенести відео — змініть дату в «Сценаріях». Деталі кожного відео — там само."))
+        "Натисніть на відео — відкриється його сценарій у вкладці «Сценарії». "
+        "Звідти «№ ↑» повертає в календар. Переносите відео — змініть дату і тут, і в «Сценаріях»."))
     n.font = font(8, MUTED, italic=True)
     n.alignment = Alignment(wrap_text=True)
     ws.row_dimensions[row].height = 28
@@ -334,7 +356,7 @@ def build_metrics(wb):
     for i in range(len(C.S)):
         r = FIRST + i
         src = FIRST + i
-        vals = [f"={SC}!A{src}", f"={SC}!B{src}", f"={SC}!F{src}", f"={SC}!E{src}"] + [None] * 9 + [
+        vals = [i + 1, f"={SC}!B{src}", f"={SC}!F{src}", f"={SC}!E{src}"] + [None] * 9 + [
             f'=IF(E{r}>0,(H{r}+I{r}+J{r}+K{r})/E{r},"")',
             f'=IF(E{r}>0,K{r}/E{r},"")',
             f"=IFERROR(VLOOKUP(D{r},'Рубрики'!$B$5:$H$8,7,FALSE),\"\")",
