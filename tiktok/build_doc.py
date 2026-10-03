@@ -12,14 +12,7 @@ import content_october as C
 
 RCLASS = {C.R1: "r1", C.R2: "r2", C.R3: "r3", C.R4: "r4"}
 
-SHORT_HOLIDAYS = {
-    dt.date(2026, 10, 1): "🇺🇦 День захисників і захисниць · Покрова",
-    dt.date(2026, 10, 4): "📚 День працівників освіти",
-    dt.date(2026, 10, 11): "🎨 День художника",
-    dt.date(2026, 10, 25): "🚗 День автомобіліста",
-    dt.date(2026, 10, 28): "🕯 Пам’ятний день",
-    dt.date(2026, 10, 31): "🎃 Хелловін",
-}
+SHORT_HOLIDAYS = C.SHORT_HOLIDAYS
 
 CSS = (
     "body{font-family:Arial;color:#333333}"
@@ -84,7 +77,7 @@ def legend():
     chips = " ".join(
         f'<span class="{RCLASS[r["name"]]} t{RCLASS[r["name"]][1]}"><b> {e(r["name"])} · {e(r["slot"])} </b></span>'
         for r in C.RUBRICS)
-    return (f'<p style="font-size:8pt">{chips} <span style="color:#B5452B"><b>червоним — свята</b></span></p>'
+    return (f'<p style="font-size:8pt">{chips} <span style="color:#B5452B"><b>червоним — церковні, державні і професійні свята</b></span></p>'
             '<p class="muted">Натисніть на відео в календарі — відкриється його сценарій. '
             'У кожному сценарії є посилання «↑ До календаря».</p>')
 
@@ -136,10 +129,10 @@ def appendix():
     parts += [f"<li><p>{e(x)}</p></li>" for x in C.RULES]
     parts.append("</ol>")
 
-    parts.append('<h2 id="holidays">Свята та інфоприводи</h2>')
+    parts.append(f'<h2 id="holidays">Свята жовтень–грудень 2026</h2><p class="muted">{e(C.HOLIDAYS_RULE)}</p>')
     parts.append(simple_table(
         ["Дата", "Свято", "Тип", "Як використати", "Відео"],
-        [[h[0].strftime("%d.%m.%Y"), f'<span style="color:#B5452B"><b>{e(h[1])}</b></span>', e(h[2]), e(h[3]), e(h[4])]
+        [[h[0].strftime("%d.%m.%Y"), f'<span style="color:#B5452B"><b>{e(h[1])}</b></span>', e(h[2]), e(h[4]), e(h[5])]
          for h in C.HOLIDAYS]))
 
     parts.append('<h2 id="refs">Референси: що спрацювало і чому</h2>'

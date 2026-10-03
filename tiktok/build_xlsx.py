@@ -15,6 +15,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.hyperlink import Hyperlink
+from openpyxl.worksheet.pagebreak import Break
 
 import content_october as C
 
@@ -97,14 +98,7 @@ def title(ws, text, sub=None, span="A1:H1"):
 FIRST = 5  # перший рядок даних у «Сценаріях»
 BY_DATE = {v["date"]: (i + 1, v) for i, v in enumerate(C.S)}
 CAL_CELL = {}  # дата → клітинка з датою в календарі (заповнює build_calendar)
-SHORT_HOLIDAYS = {
-    dt.date(2026, 10, 1): "🇺🇦 День захисників · Покрова",
-    dt.date(2026, 10, 4): "📚 День працівників освіти",
-    dt.date(2026, 10, 11): "🎨 День художника",
-    dt.date(2026, 10, 25): "🚗 День автомобіліста",
-    dt.date(2026, 10, 28): "🕯 Пам’ятний день",
-    dt.date(2026, 10, 31): "🎃 Хелловін",
-}
+HOL = "'Свята'!$A$5:$D$60"  # таблиця свят: дата, назва, тип, коротко
 LAST = FIRST + len(C.S) - 1
 SC = "'Сценарії'"
 
@@ -125,7 +119,7 @@ def build_scenarios(wb):
     for i, s in enumerate(C.S):
         r = FIRST + i
         vals = [i + 1, s["date"], s["day"], s["time"], s["rubric"], s["title"],
-                f"=IFERROR(VLOOKUP(B{r},'Свята'!$A$5:$B$30,2,FALSE),\"\")",
+                s["occasion"] or f"=IFERROR(VLOOKUP(B{r},{HOL},2,FALSE),\"\")",
                 s["essence"], s["hook"], s["board"], s["dur"], s["sound"], s["caption"],
                 s["pinned"], s["goal"], s["kpi"], s["ref"], s["need"], "Ідея", ""]
         for j, v in enumerate(vals, start=1):
@@ -158,42 +152,43 @@ def build_scenarios(wb):
     return ws
 
 
-def build_calendar(wb):
-    ws = wb.active
-    ws.title = "Календар"
-    ws.sheet_view.showGridLines = False
-    ws.column_dimensions["A"].width = 2
-    for col in "BCDEFGH":
-        ws.column_dimensions[col].width = 24
-    ws.column_dimensions["I"].width = 2
+MONTHS = {10: "Жовтень", 11: "Листопад", 12: "Грудень"}
+HOL5 = "'Свята'!$A$5:$E$60"  # те саме + колонка «Як використати»
 
-    ws.row_dimensions[1].height = 10
-    ws.merge_cells("B2:E2")
-    ws["B2"] = "Жовтень"
-    ws["B2"].font = Font(name=DISPLAY, size=54, bold=True, color="555555")
-    ws["B2"].alignment = Alignment(vertical="bottom")
-    ws.merge_cells("F2:H2")
-    ws["F2"] = "2026"
-    ws["F2"].font = Font(name=DISPLAY, size=44, bold=True, color="BDBDBD")
-    ws["F2"].alignment = Alignment(horizontal="right", vertical="bottom")
-    ws.row_dimensions[2].height = 78
-    ws.merge_cells("B3:H3")
-    ws["B3"] = "TikTok · Amber Galbin · 4 відео на тиждень · Пн 09:00 · Ср 21:00 · Пт 21:00 · Нд 11:00"
-    ws["B3"].font = font(10, MUTED)
-    ws.row_dimensions[3].height = 24
-    ws.row_dimensions[4].height = 8
 
+def month_block(ws, row, month, subtitle):
+    """Малює місяць у стилі референсу, починаючи з рядка row; повертає перший вільний рядок."""
+    ws.row_dimensions[row].height = 10
+    ws.merge_cells(f"B{row + 1}:E{row + 1}")
+    c = ws.cell(row=row + 1, column=2, value=MONTHS[month])
+    c.font = Font(name=DISPLAY, size=54, bold=True, color="555555")
+    c.alignment = Alignment(vertical="bottom")
+    ws.merge_cells(f"F{row + 1}:H{row + 1}")
+    c = ws.cell(row=row + 1, column=6, value="2026")
+    c.font = Font(name=DISPLAY, size=44, bold=True, color="BDBDBD")
+    c.alignment = Alignment(horizontal="right", vertical="bottom")
+    ws.row_dimensions[row + 1].height = 78
+    ws.merge_cells(f"B{row + 2}:H{row + 2}")
+    c = ws.cell(row=row + 2, column=2, value=subtitle)
+    c.font = font(10, MUTED)
+    ws.row_dimensions[row + 2].height = 24
+    ws.row_dimensions[row + 3].height = 8
+
+    hdr = row + 4
     days = ["ПОНЕДІЛОК", "ВІВТОРОК", "СЕРЕДА", "ЧЕТВЕР", "П’ЯТНИЦЯ", "СУБОТА", "НЕДІЛЯ"]
     for i, d in enumerate(days):
-        c = ws.cell(row=5, column=2 + i, value=d)
+        c = ws.cell(row=hdr, column=2 + i, value=d)
         c.font = Font(name=DISPLAY, size=8, color="6B6B6B")
         c.alignment = Alignment(horizontal="center", vertical="center")
         c.border = Border(left=thin, right=thin, top=thin, bottom=thin)
-    ws.row_dimensions[5].height = 28
+    ws.row_dimensions[hdr].height = 28
 
-    start = dt.date(2026, 9, 28)
-    row = 6
-    for week in range(5):
+    first = dt.date(2026, month, 1)
+    start = first - dt.timedelta(days=first.weekday())
+    last = (dt.date(2026, month + 1, 1) if month < 12 else dt.date(2027, 1, 1)) - dt.timedelta(days=1)
+    weeks = (last - start).days // 7 + 1
+    row = hdr + 1
+    for week in range(weeks):
         dr, hr, cr = row, row + 1, row + 2
         ws.row_dimensions[dr].height = 34
         ws.row_dimensions[hr].height = 22
@@ -202,14 +197,16 @@ def build_calendar(wb):
             col = 2 + i
             L = get_column_letter(col)
             day = start + dt.timedelta(days=week * 7 + i)
-            in_month = day.month == 10
+            in_month = day.month == month
             dc = ws.cell(row=dr, column=col, value=day if in_month else None)
             dc.number_format = "d"
             dc.font = Font(name=DISPLAY, size=20, color="5A5A5A")
             dc.alignment = Alignment(horizontal="left", vertical="top", indent=0)
             dc.border = Border(left=thin, right=thin, top=thin)
 
-            hc = ws.cell(row=hr, column=col, value=SHORT_HOLIDAYS.get(day) if in_month else None)
+            # свята підтягуються з вкладки «Свята»: новий рядок там одразу з’являється тут
+            hc = ws.cell(row=hr, column=col,
+                         value=f'=IFERROR(VLOOKUP({L}{dr},{HOL},4,FALSE),"")' if in_month else None)
             hc.font = font(8, HOLIDAY, bold=True)
             hc.alignment = WRAP_TOP
             hc.border = Border(left=thin, right=thin)
@@ -226,10 +223,27 @@ def build_calendar(wb):
                 cc.fill = fill(bg)
                 cc.font = font(8, fg, bold=True)
                 CAL_CELL[day] = f"{L}{dr}"
+            elif in_month:
+                # де ще немає відео — підказка, як використати свято
+                cc.value = f'=IFERROR(VLOOKUP({L}{dr},{HOL5},5,FALSE),"")'
+                cc.font = font(7, MUTED, italic=True)
             cc.alignment = WRAP_TOP
             cc.border = Border(left=thin, right=thin, bottom=thin)
         row += 3
-    last_grid = row - 1
+    return row
+
+
+def build_calendar(wb):
+    ws = wb.active
+    ws.title = "Календар"
+    ws.sheet_view.showGridLines = False
+    ws.column_dimensions["A"].width = 2
+    for col in "BCDEFGH":
+        ws.column_dimensions[col].width = 24
+    ws.column_dimensions["I"].width = 2
+
+    row = month_block(ws, 1, 10,
+                      "TikTok · Amber Galbin · 4 відео на тиждень · Пн 09:00 · Ср 21:00 · Пт 21:00 · Нд 11:00")
 
     row += 1
     ws.cell(row=row, column=2, value="РУБРИКИ").font = font(8, MUTED, bold=True)
@@ -239,7 +253,7 @@ def build_calendar(wb):
         c.font = font(8, fg, bold=True)
         c.fill = fill(bg)
         c.alignment = Alignment(wrap_text=True, vertical="center", horizontal="center")
-    c = ws.cell(row=row, column=7, value="Червоним — свята і\nінфоприводи (вкладка «Свята»)")
+    c = ws.cell(row=row, column=7, value="Червоним — церковні, державні\nі професійні свята (вкладка «Свята»)")
     c.font = font(8, HOLIDAY, bold=True)
     c.alignment = Alignment(wrap_text=True, vertical="center")
     ws.row_dimensions[row].height = 32
@@ -247,10 +261,17 @@ def build_calendar(wb):
     ws.merge_cells(f"B{row}:H{row}")
     n = ws.cell(row=row, column=2, value=(
         "Натисніть на відео — відкриється його сценарій у вкладці «Сценарії». "
-        "Звідти «№ ↑» повертає в календар. Переносите відео — змініть дату і тут, і в «Сценаріях»."))
+        "Звідти «№ ↑» повертає в календар. Переносите відео — змініть дату і тут, і в «Сценаріях». "
+        "Свята і підказки підтягуються з вкладки «Свята»."))
     n.font = font(8, MUTED, italic=True)
     n.alignment = Alignment(wrap_text=True)
     ws.row_dimensions[row].height = 28
+
+    row += 2
+    ws.row_breaks.append(Break(id=row - 1))
+    row = month_block(ws, row, 11, "Свята і підказки, як їх використати. Відео на листопад — у наступному плані.")
+    ws.row_breaks.append(Break(id=row))
+    month_block(ws, row + 1, 12, "Свята і підказки, як їх використати. Відео на грудень — у наступному плані.")
     return ws
 
 
@@ -289,14 +310,14 @@ def build_rubrics(wb):
 def build_holidays(wb):
     ws = wb.create_sheet("Свята")
     ws.sheet_view.showGridLines = False
-    title(ws, "Свята та інфоприводи",
-          "Дати перевірені на 2026 рік. Календар підтягує назву свята за датою з колонки A — "
-          "додайте рядок, і свято з’явиться в календарі.", span="A1:E1")
-    header_row(ws, 4, ["Дата", "Свято / подія", "Тип", "Як використати в контенті", "Відео в плані"],
-               [10, 40, 18, 56, 12])
-    for i, (d, name, kind, use, vid) in enumerate(C.HOLIDAYS):
+    title(ws, "Свята жовтень–грудень 2026",
+          C.HOLIDAYS_RULE + " Дати перевірені на 2026 рік. Календар бере коротку назву з колонки D за датою: "
+          "додайте рядок — і свято з’явиться в календарі (одна дата — один рядок).", span="A1:F1")
+    header_row(ws, 4, ["Дата", "Свято / подія", "Тип", "Коротко для календаря", "Як використати в контенті",
+                       "Відео в плані"], [10, 38, 18, 24, 52, 14])
+    for i, row in enumerate(C.HOLIDAYS):
         r = 5 + i
-        for j, v in enumerate([d, name, kind, use, vid], start=1):
+        for j, v in enumerate(row, start=1):
             c = ws.cell(row=r, column=j, value=v)
             c.font = font(9)
             c.alignment = WRAP_TOP
@@ -418,7 +439,7 @@ def main(out):
         ws.page_setup.paperSize = ws.PAPERSIZE_A4
         ws.sheet_properties.pageSetUpPr.fitToPage = True
         ws.page_setup.fitToWidth = 1
-        ws.page_setup.fitToHeight = 1 if ws.title == "Календар" else 0
+        ws.page_setup.fitToHeight = 0  # календар ділиться на сторінки по місяцях (row_breaks)
         ws.print_options.horizontalCentered = True
     tmp = out + ".tmp"
     wb.save(tmp)
